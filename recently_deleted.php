@@ -2,6 +2,7 @@
 try {
     include 'session_check.php';
     include 'db_connect.php';
+    require_once 'recycle_bin_helper.php';
 
     // --- ACCESS CONTROL FIX ---
     if (!isset($_SESSION['role']) || !in_array(strtolower(trim($_SESSION['role'])), ['admin', 'super_admin'])) {
@@ -11,37 +12,10 @@ try {
 
     $local_conn = $conn;
 
-    // --- 1. AUTO-CREATE MISSING TABLES ---
-    // Ensure recently_deleted matches cart structure
-    $chk_rd = $local_conn->query("SHOW TABLES LIKE 'recently_deleted'");
-    if (!$chk_rd || $chk_rd->num_rows == 0) {
-        $local_conn->query("CREATE TABLE `recently_deleted` LIKE cart");
-        $local_conn->query("ALTER TABLE `recently_deleted` ADD COLUMN deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
-    }
-
-    $local_conn->query("CREATE TABLE IF NOT EXISTS `recently_deleted_products` (
-      `id` int(11) NOT NULL AUTO_INCREMENT,
-      `original_id` int(11) NOT NULL,
-      `name` varchar(255) NOT NULL,
-      `price` decimal(10,2) NOT NULL,
-      `stock` int(11) NOT NULL,
-      `image` varchar(255) NOT NULL,
-      `category` varchar(100) NOT NULL,
-      `rating` int(11) DEFAULT 5,
-      `deleted_at` timestamp NOT NULL DEFAULT current_timestamp(),
-      PRIMARY KEY (`id`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
-
-    $local_conn->query("CREATE TABLE IF NOT EXISTS `recently_deleted_users` (
-      `id` int(11) NOT NULL AUTO_INCREMENT,
-      `original_id` int(11) NOT NULL,
-      `fullname` varchar(255) DEFAULT NULL,
-      `username` varchar(255) NOT NULL,
-      `email` varchar(255) NOT NULL,
-      `role` varchar(50) NOT NULL DEFAULT 'user',
-      `deleted_at` timestamp NOT NULL DEFAULT current_timestamp(),
-      PRIMARY KEY (`id`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+    // --- 1. AUTO-SYNC TABLES ---
+    syncRecycleBinSchema($local_conn, 'cart', 'recently_deleted');
+    syncRecycleBinSchema($local_conn, 'products', 'recently_deleted_products');
+    syncRecycleBinSchema($local_conn, 'users', 'recently_deleted_users');
 
     // --- 2. DATA FOR HEADER ICONS ---
     $unread_inquiries = 0;
@@ -376,23 +350,23 @@ try {
                             <tbody>
                                 <?php if ($deleted_orders && $deleted_orders->num_rows > 0): ?>
                                     <?php while($row = $deleted_orders->fetch_assoc()):
-                                        // Handle original ID if the table structure matches cart exactly
-                                        $display_id = $row['id'] ?? ($row['order_id'] ?? 0);
+                                        // Priority for order_id column if it specifically holds the ID we want
+                                        $display_id = $row['order_id'] ?? ($row['id'] ?? 0);
                                     ?>
                                     <tr>
-                                        <td><strong>#<?php echo str_pad($row['id'] ?? ($row['order_id'] ?? 0), 4, '0', STR_PAD_LEFT); ?></strong></td>
+                                        <td><strong>#<?php echo str_pad($display_id, 4, '0', STR_PAD_LEFT); ?></strong></td>
                                         <td><strong><?php echo htmlspecialchars($row['fullname'] ?? 'Unknown'); ?></strong></td>
                                         <td><strong style="color:#A05E44 !important; font-family:var(--font-heading) !important; font-size:1.1rem !important;">₱<?php echo number_format($row['total'] ?? 0, 2); ?></strong></td>
                                         <td><span><i class="far fa-clock" style="margin-right:5px;"></i><?php echo isset($row['deleted_at']) ? date("M d, Y", strtotime($row['deleted_at'])) : 'N/A'; ?></span></td>
                                         <td>
                                             <div class="action-icons">
                                                 <form action="restore_delete.php" method="POST">
-                                                    <input type="hidden" name="id" value="<?php echo $row['id']; ?>">
+                                                    <input type="hidden" name="id" value="<?php echo $row['bin_id'] ?? $row['id']; ?>">
                                                     <input type="hidden" name="action" value="restore">
                                                     <button type="submit" class="btn-solid btn-solid-green" title="Restore"><i class="fas fa-undo"></i> Restore</button>
                                                 </form>
                                                 <form action="recently_deleted_action.php" method="POST" onsubmit="return confirm('Permanent delete cannot be undone. Proceed?');">
-                                                    <input type="hidden" name="id" value="<?php echo $row['id']; ?>">
+                                                    <input type="hidden" name="id" value="<?php echo $row['bin_id'] ?? $row['id']; ?>">
                                                     <input type="hidden" name="action" value="permanent_delete">
                                                     <button type="submit" class="btn-solid btn-solid-red" title="Delete Permanently"><i class="fas fa-trash-alt"></i> Delete</button>
                                                 </form>
@@ -428,19 +402,19 @@ try {
                                 <?php if ($deleted_products && $deleted_products->num_rows > 0): ?>
                                     <?php while($row = $deleted_products->fetch_assoc()): ?>
                                     <tr>
-                                        <td><strong><?php echo htmlspecialchars($row['name'] ?? 'Unknown'); ?></strong></td>
+                                        <td><strong><?php echo htmlspecialchars($row['name'] ?? ('Product #'.($row['original_id'] ?? ($row['id']??'')))); ?></strong></td>
                                         <td><span style="background:rgba(212, 163, 115, 0.15) !important; color:#B37D4D !important; padding:4px 10px; border-radius:4px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px;"><?php echo htmlspecialchars($row['category'] ?? 'Uncategorized'); ?></span></td>
                                         <td><strong style="color:#A05E44 !important; font-family:var(--font-heading) !important; font-size:1.1rem !important;">₱<?php echo number_format($row['price'] ?? 0, 2); ?></strong></td>
                                         <td><span><i class="far fa-clock" style="margin-right:5px;"></i><?php echo isset($row['deleted_at']) ? date("M d, Y", strtotime($row['deleted_at'])) : 'N/A'; ?></span></td>
                                         <td>
                                             <div class="action-icons">
                                                 <form action="restore_delete_product.php" method="POST">
-                                                    <input type="hidden" name="id" value="<?php echo $row['id']; ?>">
+                                                    <input type="hidden" name="id" value="<?php echo $row['bin_id'] ?? $row['id']; ?>">
                                                     <input type="hidden" name="action" value="restore">
                                                     <button type="submit" class="btn-solid btn-solid-green" title="Restore Product"><i class="fas fa-undo"></i> Restore</button>
                                                 </form>
                                                 <form action="product_actions.php" method="POST" onsubmit="return confirm('Delete product permanently?');">
-                                                    <input type="hidden" name="id" value="<?php echo $row['id']; ?>">
+                                                    <input type="hidden" name="id" value="<?php echo $row['bin_id'] ?? $row['id']; ?>">
                                                     <input type="hidden" name="action" value="permanent_delete">
                                                     <button type="submit" class="btn-solid btn-solid-red" title="Delete Permanently"><i class="fas fa-trash-alt"></i> Delete</button>
                                                 </form>
@@ -476,9 +450,10 @@ try {
                                 <?php if ($deleted_users && $deleted_users->num_rows > 0): ?>
                                     <?php while($row = $deleted_users->fetch_assoc()): 
                                         $displayName = !empty($row['fullname']) ? $row['fullname'] : (!empty($row['username']) ? $row['username'] : $row['email']);
+                                        $user_display_id = $row['original_id'] ?? ($row['id'] ?? 0);
                                     ?>
                                     <tr>
-                                        <td><strong style="font-size: 15px;"><?php echo htmlspecialchars($displayName); ?></strong></td>
+                                        <td><strong style="font-size: 15px;"><?php echo htmlspecialchars($displayName); ?></strong> <small style="color:var(--text-muted)">(#<?php echo $user_display_id; ?>)</small></td>
                                         <td><span><i class="fas fa-envelope" style="margin-right:5px; font-size:11px;"></i><?php echo htmlspecialchars($row['email'] ?? 'No Email'); ?></span></td>
                                         <td>
                                             <?php 
@@ -491,12 +466,12 @@ try {
                                         <td>
                                             <div class="action-icons">
                                                 <form action="user_restore_actions.php" method="POST">
-                                                    <input type="hidden" name="id" value="<?php echo $row['id']; ?>">
+                                                    <input type="hidden" name="id" value="<?php echo $row['bin_id'] ?? $row['id']; ?>">
                                                     <input type="hidden" name="action" value="restore">
                                                     <button type="submit" class="btn-solid btn-solid-green" title="Restore User"><i class="fas fa-undo"></i> Restore</button>
                                                 </form>
                                                 <form action="user_restore_actions.php" method="POST" onsubmit="return confirm('Delete user account permanently?');">
-                                                    <input type="hidden" name="id" value="<?php echo $row['id']; ?>">
+                                                    <input type="hidden" name="id" value="<?php echo $row['bin_id'] ?? $row['id']; ?>">
                                                     <input type="hidden" name="action" value="permanent_delete">
                                                     <button type="submit" class="btn-solid btn-solid-red" title="Delete Permanently"><i class="fas fa-trash-alt"></i> Delete</button>
                                                 </form>

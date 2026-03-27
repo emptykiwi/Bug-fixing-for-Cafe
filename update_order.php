@@ -2,6 +2,7 @@
 require_once 'config.php'; // Use the central config file for DB connection
 require_once 'notifications.php';
 require_once 'audit_log.php';
+require_once 'recycle_bin_helper.php';
 session_start();
 
 // Check if the main connection ($conn) from config.php is working
@@ -32,31 +33,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $row = $res->fetch_assoc();
             $sel->close();
 
-            // 2) --- ROBUST RECYCLE BIN LOGIC ---
-            $target_table = 'recently_deleted';
-            
-            // A. Create table from structure of cart
-            $conn->query("CREATE TABLE IF NOT EXISTS `$target_table` LIKE cart");
-            
-            // B. Ensure 'deleted_at' column exists
-            $chk_da = $conn->query("SHOW COLUMNS FROM `$target_table` LIKE 'deleted_at'");
-            if ($chk_da->num_rows == 0) {
-                $conn->query("ALTER TABLE `$target_table` ADD COLUMN deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP");
-            }
-            
-            // C. Copy record with ALL columns dynamically
-            $columns = [];
-            $res_cols = $conn->query("SHOW COLUMNS FROM cart");
-            while ($c = $res_cols->fetch_assoc()) { $columns[] = "`" . $c['Field'] . "`"; }
-            $col_list = implode(", ", $columns);
-            
-            // Insert into recycle bin
-            $copy_sql = "INSERT INTO `$target_table` ($col_list, deleted_at) SELECT $col_list, NOW() FROM cart WHERE id = ?";
-            $ins = $conn->prepare($copy_sql);
-            if (!$ins) throw new Exception("Prepare INSERT failed: " . $conn->error);
-            $ins->bind_param("i", $id);
-            if (!$ins->execute()) throw new Exception("Execute INSERT into recycle bin failed: " . $ins->error);
-            $ins->close();
+            // 2) --- ROBUST RECYCLE BIN LOGIC (Helper Used) ---
+            moveToRecycleBin($conn, 'cart', 'recently_deleted', $id);
 
             // 3) Sync status in `orders` table to 'Cancelled' or something indicative
             if (!empty($row['order_id'])) {

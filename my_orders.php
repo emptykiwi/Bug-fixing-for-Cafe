@@ -299,7 +299,7 @@ if ($stmt) {
                                             <i class="fas fa-eye"></i> View
                                         </button>
                                         
-                                        <?php if ($status === 'pending'): ?>
+                                        <?php if ($status_lower === 'pending'): ?>
                                             <a href="cancel_order.php?id=<?php echo $order['id']; ?>" class="action-btn" style="color: #e02424; border-color: #fbc4c4;" onclick="return confirm('Are you sure you want to cancel this order?');">
                                                 <i class="fas fa-times"></i> Cancel
                                             </a>

@@ -8,8 +8,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = intval($_POST['id']);
     $action = $_POST['action'];
 
+    $chk = $conn->query("SHOW COLUMNS FROM recently_deleted LIKE 'bin_id'");
+    $id_col = ($chk && $chk->num_rows > 0) ? "bin_id" : "id";
+
     // kunin muna yung record
-    $res = $conn->query("SELECT * FROM recently_deleted WHERE id = $id");
+    $res = $conn->query("SELECT * FROM recently_deleted WHERE $id_col = $id");
     if ($res && $res->num_rows > 0) {
         $row = $res->fetch_assoc();
 
@@ -20,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         } elseif ($action === 'permanent_delete') {
             // tuluyang burahin
-            $conn->query("DELETE FROM recently_deleted WHERE id = $id");
+            $conn->query("DELETE FROM recently_deleted WHERE $id_col = $id");
         }
     }
 }

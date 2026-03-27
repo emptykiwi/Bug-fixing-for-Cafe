@@ -12,34 +12,14 @@ if ($chk_cart && $chk_cart->num_rows == 0) {
     $conn->query("ALTER TABLE `cart` ADD COLUMN `order_id` INT NULL AFTER `user_id`");
 }
 
-// Ensure recently_deleted matches cart plus deleted_at
-$chk_rd = $conn->query("SHOW TABLES LIKE 'recently_deleted'");
-if ($chk_rd && $chk_rd->num_rows > 0) {
-    echo "Updating recently_deleted schema to match cart...\n";
-    // We add missing columns from cart to recently_deleted
-    $res_cols = $conn->query("SHOW COLUMNS FROM cart");
-    while ($c = $res_cols->fetch_assoc()) {
-        $col = $c['Field'];
-        $type = $c['Type'];
-        $null = ($c['Null'] == 'YES') ? 'NULL' : 'NOT NULL';
-        $def = ($c['Default'] !== null) ? "DEFAULT '" . $conn->real_escape_string($c['Default']) . "'" : "";
+// Helper functions moved to recycle_bin_helper.php
 
-        $chk = $conn->query("SHOW COLUMNS FROM `recently_deleted` LIKE '$col'");
-        if ($chk && $chk->num_rows == 0) {
-            echo "Adding $col to recently_deleted...\n";
-            $conn->query("ALTER TABLE `recently_deleted` ADD COLUMN `$col` $type $null $def");
-        }
-    }
+// Include helper for syncRecycleBinSchema
+require_once 'recycle_bin_helper.php';
 
-    $chk_da = $conn->query("SHOW COLUMNS FROM `recently_deleted` LIKE 'deleted_at'");
-    if ($chk_da && $chk_da->num_rows == 0) {
-        $conn->query("ALTER TABLE `recently_deleted` ADD COLUMN `deleted_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
-    }
-} else {
-    echo "Creating recently_deleted table...\n";
-    $conn->query("CREATE TABLE `recently_deleted` LIKE cart");
-    $conn->query("ALTER TABLE `recently_deleted` ADD COLUMN `deleted_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
-}
+syncRecycleBinSchema($conn, 'cart', 'recently_deleted');
+syncRecycleBinSchema($conn, 'products', 'recently_deleted_products');
+syncRecycleBinSchema($conn, 'users', 'recently_deleted_users');
 
 // 2. Link cart items to orders
 echo "Linking cart items to orders...\n";
