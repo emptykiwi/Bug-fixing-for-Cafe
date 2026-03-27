@@ -276,13 +276,13 @@ if ($stmt) {
                                             if ($status_lower === 'completed' || $status_lower === 'delivered') {
                                                 $display_text = 'Delivered';
                                                 $status_class = 'status-completed';
-                                            } elseif ($status_lower === 'confirmed' || $status_lower === 'accepted' || $status_lower === 'confirm') {
+                                            } elseif ($status_lower === 'confirmed' || $status_lower === 'accepted' || $status_lower === 'confirm' || $status_lower === 'accept') {
                                                 $display_text = 'Confirmed';
                                                 $status_class = 'status-confirmed';
                                             } elseif ($status_lower === 'processing' || $status_lower === 'preparing' || $status_lower === 'process') {
                                                 $display_text = 'Processing';
                                                 $status_class = 'status-processing';
-                                            } elseif ($status_lower === 'out for delivery' || $status_lower === 'out_for_delivery' || $status_lower === 'ship') {
+                                            } elseif ($status_lower === 'out for delivery' || $status_lower === 'out_for_delivery' || $status_lower === 'ship' || $status_lower === 'out_for_delivery') {
                                                 $display_text = 'Out for Delivery';
                                                 $status_class = 'status-out-for-delivery';
                                             } elseif ($status_lower === 'cancelled' || $status_lower === 'cancel') {

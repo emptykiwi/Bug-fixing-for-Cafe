@@ -12,19 +12,12 @@ try {
     $local_conn = $conn;
 
     // --- 1. AUTO-CREATE MISSING TABLES ---
-    $local_conn->query("CREATE TABLE IF NOT EXISTS `recently_deleted` (
-      `id` int(11) NOT NULL AUTO_INCREMENT,
-      `order_id` int(11) NOT NULL,
-      `fullname` varchar(255) NOT NULL,
-      `contact` varchar(20) NOT NULL,
-      `address` text NOT NULL,
-      `cart` longtext NOT NULL,
-      `total` decimal(10,2) NOT NULL,
-      `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-      `status` varchar(50) NOT NULL,
-      `deleted_at` timestamp NOT NULL DEFAULT current_timestamp(),
-      PRIMARY KEY (`id`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+    // Ensure recently_deleted matches cart structure
+    $chk_rd = $local_conn->query("SHOW TABLES LIKE 'recently_deleted'");
+    if (!$chk_rd || $chk_rd->num_rows == 0) {
+        $local_conn->query("CREATE TABLE `recently_deleted` LIKE cart");
+        $local_conn->query("ALTER TABLE `recently_deleted` ADD COLUMN deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
+    }
 
     $local_conn->query("CREATE TABLE IF NOT EXISTS `recently_deleted_products` (
       `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -382,9 +375,12 @@ try {
                             </thead>
                             <tbody>
                                 <?php if ($deleted_orders && $deleted_orders->num_rows > 0): ?>
-                                    <?php while($row = $deleted_orders->fetch_assoc()): ?>
+                                    <?php while($row = $deleted_orders->fetch_assoc()):
+                                        // Handle original ID if the table structure matches cart exactly
+                                        $display_id = $row['id'] ?? ($row['order_id'] ?? 0);
+                                    ?>
                                     <tr>
-                                        <td><strong>#<?php echo str_pad($row['order_id'] ?? 0, 4, '0', STR_PAD_LEFT); ?></strong></td>
+                                        <td><strong>#<?php echo str_pad($row['id'] ?? ($row['order_id'] ?? 0), 4, '0', STR_PAD_LEFT); ?></strong></td>
                                         <td><strong><?php echo htmlspecialchars($row['fullname'] ?? 'Unknown'); ?></strong></td>
                                         <td><strong style="color:#A05E44 !important; font-family:var(--font-heading) !important; font-size:1.1rem !important;">₱<?php echo number_format($row['total'] ?? 0, 2); ?></strong></td>
                                         <td><span><i class="far fa-clock" style="margin-right:5px;"></i><?php echo isset($row['deleted_at']) ? date("M d, Y", strtotime($row['deleted_at'])) : 'N/A'; ?></span></td>

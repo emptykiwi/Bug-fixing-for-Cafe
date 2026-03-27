@@ -1,72 +1,87 @@
 <?php
+// fix_database.php - Utility to repair database consistency
 require_once 'config.php';
 
-// 1. Add 'is_verified' column if it's missing
-$sql = "ALTER TABLE users ADD COLUMN is_verified TINYINT(1) DEFAULT 0 AFTER role";
-if ($conn->query($sql) === TRUE) {
-    echo "<p style='color:green;'>✅ Successfully added 'is_verified' column.</p>";
-    // Mark existing users as verified
-    $conn->query("UPDATE users SET is_verified = 1 WHERE is_verified = 0");
+echo "Starting database repair...\n";
+
+// 1. Ensure columns exist and tables match
+echo "Checking table structures...\n";
+$chk_cart = $conn->query("SHOW COLUMNS FROM `cart` LIKE 'order_id'");
+if ($chk_cart && $chk_cart->num_rows == 0) {
+    echo "Adding order_id to cart...\n";
+    $conn->query("ALTER TABLE `cart` ADD COLUMN `order_id` INT NULL AFTER `user_id`");
+}
+
+// Ensure recently_deleted matches cart plus deleted_at
+$chk_rd = $conn->query("SHOW TABLES LIKE 'recently_deleted'");
+if ($chk_rd && $chk_rd->num_rows > 0) {
+    echo "Updating recently_deleted schema to match cart...\n";
+    // We add missing columns from cart to recently_deleted
+    $res_cols = $conn->query("SHOW COLUMNS FROM cart");
+    while ($c = $res_cols->fetch_assoc()) {
+        $col = $c['Field'];
+        $type = $c['Type'];
+        $null = ($c['Null'] == 'YES') ? 'NULL' : 'NOT NULL';
+        $def = ($c['Default'] !== null) ? "DEFAULT '" . $conn->real_escape_string($c['Default']) . "'" : "";
+
+        $chk = $conn->query("SHOW COLUMNS FROM `recently_deleted` LIKE '$col'");
+        if ($chk && $chk->num_rows == 0) {
+            echo "Adding $col to recently_deleted...\n";
+            $conn->query("ALTER TABLE `recently_deleted` ADD COLUMN `$col` $type $null $def");
+        }
+    }
+
+    $chk_da = $conn->query("SHOW COLUMNS FROM `recently_deleted` LIKE 'deleted_at'");
+    if ($chk_da && $chk_da->num_rows == 0) {
+        $conn->query("ALTER TABLE `recently_deleted` ADD COLUMN `deleted_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
+    }
 } else {
-    if (strpos($conn->error, 'Duplicate column') !== false) {
-        echo "<p style='color:blue;'>ℹ️ 'is_verified' column already exists.</p>";
-    } else {
-        echo "<p style='color:red;'>❌ Error adding column: " . $conn->error . "</p>";
-    }
+    echo "Creating recently_deleted table...\n";
+    $conn->query("CREATE TABLE `recently_deleted` LIKE cart");
+    $conn->query("ALTER TABLE `recently_deleted` ADD COLUMN `deleted_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
 }
 
-// 2. Ensure 'contact' column exists (just in case)
-$sql2 = "ALTER TABLE users ADD COLUMN contact VARCHAR(20) AFTER email";
-if ($conn->query($sql2)) {
-    echo "<p style='color:green;'>✅ Successfully added 'contact' column.</p>";
-}
+// 2. Link cart items to orders
+echo "Linking cart items to orders...\n";
+$cart_res = $conn->query("SELECT id, user_id, total, created_at, order_id FROM cart WHERE order_id IS NULL OR order_id = 0");
+if ($cart_res) {
+    while ($cart = $cart_res->fetch_assoc()) {
+        $cid = $cart['id'];
+        $uid = $cart['user_id'];
+        $total = $cart['total'];
+        $date = date('Y-m-d', strtotime($cart['created_at']));
 
-// 3. Robust Link and Sync for my_orders.php
-echo "<h3>Linking and Syncing order statuses...</h3>";
+        $order_stmt = $conn->prepare("SELECT id FROM orders WHERE user_id = ? AND total = ? AND DATE(created_at) = ? ORDER BY created_at DESC LIMIT 1");
+        $order_stmt->bind_param("ids", $uid, $total, $date);
+        $order_stmt->execute();
+        $order_res = $order_stmt->get_result();
 
-// Link cart.order_id to orders.id first
-$res = $conn->query("SELECT id, user_id, total, created_at FROM cart WHERE order_id IS NULL");
-while($row = $res->fetch_assoc()) {
-    $cid = $row['id'];
-    $uid = $row['user_id'];
-    $tot = $row['total'];
-    $cat = $row['created_at'];
-
-    $stmt = $conn->prepare("SELECT id FROM orders WHERE user_id = ? AND total = ? AND DATE(created_at) = DATE(?) LIMIT 1");
-    if ($stmt) {
-        $stmt->bind_param("ids", $uid, $tot, $cat);
-        $stmt->execute();
-        $ord_id = $stmt->get_result()->fetch_assoc()['id'] ?? null;
-        $stmt->close();
-
-        if ($ord_id) {
-            $conn->query("UPDATE cart SET order_id = $ord_id WHERE id = $cid");
+        if ($order = $order_res->fetch_assoc()) {
+            $oid = $order['id'];
+            $up_stmt = $conn->prepare("UPDATE cart SET order_id = ? WHERE id = ?");
+            $up_stmt->bind_param("ii", $oid, $cid);
+            $up_stmt->execute();
+            $up_stmt->close();
+            echo "Linked Cart #$cid to Order #$oid\n";
         }
+        $order_stmt->close();
     }
 }
 
-// Now Sync statuses based on the link or heuristic
-$res = $conn->query("SELECT order_id, user_id, total, status, created_at FROM cart WHERE status != 'Pending'");
-while($row = $res->fetch_assoc()) {
-    $oid = $row['order_id'];
-    $uid = $row['user_id'];
-    $tot = $row['total'];
-    $st  = $row['status'];
-    $cat = $row['created_at'];
+// 3. Sync statuses
+echo "Syncing statuses between cart and orders...\n";
+$sync_res = $conn->query("SELECT id, order_id, status FROM cart WHERE order_id IS NOT NULL AND order_id > 0");
+if ($sync_res) {
+    while ($row = $sync_res->fetch_assoc()) {
+        $oid = $row['order_id'];
+        $status = $row['status'];
 
-    if ($oid) {
-        $conn->query("UPDATE orders SET status = '$st' WHERE id = $oid AND (status IS NULL OR status = '' OR status = 'Pending')");
-    } else {
-        $stmt = $conn->prepare("UPDATE orders SET status = ? WHERE user_id = ? AND total = ? AND DATE(created_at) = DATE(?) AND (status IS NULL OR status = '' OR status = 'Pending') LIMIT 1");
-        if ($stmt) {
-            $stmt->bind_param("sids", $st, $uid, $tot, $cat);
-            $stmt->execute();
-            $stmt->close();
-        }
+        $up_stmt = $conn->prepare("UPDATE orders SET status = ? WHERE id = ?");
+        $up_stmt->bind_param("si", $status, $oid);
+        $up_stmt->execute();
+        $up_stmt->close();
     }
 }
 
-echo "<h3>Database Fix Complete. Please delete this file and try registering again.</h3>";
-echo "<a href='index.php'>Go back to Home</a>";
-$conn->close();
+echo "Database repair complete!\n";
 ?>

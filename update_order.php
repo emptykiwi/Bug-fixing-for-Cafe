@@ -35,12 +35,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // 2) --- ROBUST RECYCLE BIN LOGIC ---
             $target_table = 'recently_deleted';
             
-            // A. Ensure table exists (Clone structure)
+            // A. Create table from structure of cart
             $conn->query("CREATE TABLE IF NOT EXISTS `$target_table` LIKE cart");
             
             // B. Ensure 'deleted_at' column exists
-            $cols = $conn->query("SHOW COLUMNS FROM `$target_table` LIKE 'deleted_at'");
-            if ($cols->num_rows == 0) {
+            $chk_da = $conn->query("SHOW COLUMNS FROM `$target_table` LIKE 'deleted_at'");
+            if ($chk_da->num_rows == 0) {
                 $conn->query("ALTER TABLE `$target_table` ADD COLUMN deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP");
             }
             
@@ -50,19 +50,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             while ($c = $res_cols->fetch_assoc()) { $columns[] = "`" . $c['Field'] . "`"; }
             $col_list = implode(", ", $columns);
             
-            // D. Check for additional columns in target table (e.g., 'order_id')
-            // This is to handle the case where the recently_deleted table might have extra columns
-            // But we've ensured they match 'cart' using LIKE.
-
             // Insert into recycle bin
             $copy_sql = "INSERT INTO `$target_table` ($col_list, deleted_at) SELECT $col_list, NOW() FROM cart WHERE id = ?";
             $ins = $conn->prepare($copy_sql);
             if (!$ins) throw new Exception("Prepare INSERT failed: " . $conn->error);
             $ins->bind_param("i", $id);
-            $ins->execute();
+            if (!$ins->execute()) throw new Exception("Execute INSERT into recycle bin failed: " . $ins->error);
             $ins->close();
 
-            // 3) Delete from cart
+            // 3) Sync status in `orders` table to 'Cancelled' or something indicative
+            if (!empty($row['order_id'])) {
+                $up_orders = $conn->prepare("UPDATE orders SET status = 'Cancelled' WHERE id = ?");
+                $up_orders->bind_param("i", $row['order_id']);
+                $up_orders->execute();
+                $up_orders->close();
+            }
+
+            // 4) Delete from cart
             $del = $conn->prepare("DELETE FROM cart WHERE id = ?");
             $del->bind_param("i", $id);
             $del->execute();

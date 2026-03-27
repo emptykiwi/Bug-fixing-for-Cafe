@@ -126,6 +126,17 @@ if ($ap) {
         }
     }
 
+    // Ensure `recently_deleted` table matches `cart` plus `deleted_at`
+    // We do this by ensuring the columns in `recently_deleted` reflect `cart`
+    $chk_rd = $ap->query("SHOW TABLES LIKE 'recently_deleted'");
+    if ($chk_rd && $chk_rd->num_rows > 0) {
+        // Table exists, check for deleted_at
+        $chk_da = $ap->query("SHOW COLUMNS FROM `recently_deleted` LIKE 'deleted_at'");
+        if ($chk_da && $chk_da->num_rows == 0) {
+            @$ap->query("ALTER TABLE `recently_deleted` ADD COLUMN `deleted_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
+        }
+    }
+
     // Ensure `revenue` table exists
     $createRevenueSql = "CREATE TABLE IF NOT EXISTS `revenue` (
       `id` INT AUTO_INCREMENT PRIMARY KEY,
