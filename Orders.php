@@ -250,7 +250,7 @@ function getInitials($name) {
     .dropdown-item:last-child { border-bottom: none; }
 
     @media (max-width: 1024px) {
-        .main-content { margin-left: 0; width: 100%; }
+        .main-content { margin-left: 0; width: 100%; padding-top: 80px; }
     }
 </style>
 </head>

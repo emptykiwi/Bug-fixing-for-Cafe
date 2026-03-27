@@ -69,6 +69,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($insert_stmt->execute()) {
                     $insert_stmt->close();
 
+                    // Restore status in orders table as well
+                    if (!empty($row['order_id']) && !empty($row['status'])) {
+                        $upd_orders = $conn->prepare("UPDATE orders SET status = ? WHERE id = ?");
+                        $upd_orders->bind_param("si", $row['status'], $row['order_id']);
+                        $upd_orders->execute();
+                        $upd_orders->close();
+                    }
+
                     // Remove from recently_deleted
                     $delete_sql = "DELETE FROM recently_deleted WHERE id = ?";
                     $delete_stmt = $conn->prepare($delete_sql);

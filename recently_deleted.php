@@ -313,7 +313,7 @@ try {
         .dropdown-item { padding: 15px 20px; display: block; text-decoration: none; color: var(--text-dark); font-size: 13px; border-bottom: 1px solid var(--bg-main); transition: 0.3s; }
         .dropdown-item:hover { background: var(--bg-main); color: var(--primary); padding-left: 25px; }
 
-        @media (max-width: 1024px) { .main-content { margin-left: 0; width: 100%; } }
+        @media (max-width: 1024px) { .main-content { margin-left: 0; width: 100%; padding-top: 80px; } }
     </style>
 </head>
 <body>

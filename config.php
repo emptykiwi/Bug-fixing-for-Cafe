@@ -2,6 +2,9 @@
 // config.php
 // Gracefully handle database connections and table setup for Hostinger Live Server
 
+// Set default timezone to UTC+08:00 Taipei
+date_default_timezone_set('Asia/Taipei');
+
 // Turn off mysqli exceptions so we can handle errors ourselves
 mysqli_report(MYSQLI_REPORT_OFF);
 
@@ -20,6 +23,9 @@ if (!$conn) {
 
 // Set charset
 mysqli_set_charset($conn, 'utf8mb4');
+
+// Set MySQL session timezone to UTC+08:00
+mysqli_query($conn, "SET time_zone = '+08:00'");
 
 // 2) Ensure `users` table exists
 $createUsersSql = "CREATE TABLE IF NOT EXISTS `users` (
@@ -108,6 +114,7 @@ if ($ap) {
     // Ensure `cart` has necessary columns
     $cartCols = [
         'user_id'       => "INT NULL AFTER `id`",
+        'order_id'      => "INT NULL AFTER `user_id`",
         'cancel_reason' => "VARCHAR(255) NULL AFTER `status`",
         'cancelled_at'  => "TIMESTAMP NULL AFTER `cancel_reason`"
     ];

@@ -51,17 +51,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $col_list = implode(", ", $columns);
             
             // D. Check for additional columns in target table (e.g., 'order_id')
-            $target_columns = [];
-            $res_target_cols = $conn->query("SHOW COLUMNS FROM `$target_table` ");
-            while ($tc = $res_target_cols->fetch_assoc()) { $target_columns[] = $tc['Field']; }
-
-            $extra_cols = ""; $extra_vals = "";
-            if (in_array('order_id', $target_columns) && !in_array('order_id', array_map(function($c) { return trim($c, "`"); }, $columns))) {
-                $extra_cols = ", order_id"; $extra_vals = ", id";
-            }
+            // This is to handle the case where the recently_deleted table might have extra columns
+            // But we've ensured they match 'cart' using LIKE.
 
             // Insert into recycle bin
-            $copy_sql = "INSERT INTO `$target_table` ($col_list $extra_cols, deleted_at) SELECT $col_list $extra_vals, NOW() FROM cart WHERE id = ?";
+            $copy_sql = "INSERT INTO `$target_table` ($col_list, deleted_at) SELECT $col_list, NOW() FROM cart WHERE id = ?";
             $ins = $conn->prepare($copy_sql);
             if (!$ins) throw new Exception("Prepare INSERT failed: " . $conn->error);
             $ins->bind_param("i", $id);
@@ -128,11 +122,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // 4) Update Orders Table (Sync)
             // Use order_id if linked, otherwise fallback to heuristic
-            if ($order['order_id']) {
+            if (!empty($order['order_id'])) {
                 $up_orders = $conn->prepare("UPDATE orders SET status = ? WHERE id = ?");
                 $up_orders->bind_param("si", $new_status, $order['order_id']);
             } else {
-                $up_orders = $conn->prepare("UPDATE orders SET status = ? WHERE user_id = ? AND total = ? AND status = 'Pending' ORDER BY created_at DESC LIMIT 1");
+                // Heuristic: Match user, total, and non-cancelled/completed status
+                $up_orders = $conn->prepare("UPDATE orders SET status = ? WHERE user_id = ? AND total = ? AND status NOT IN ('Delivered', 'Cancelled') ORDER BY created_at DESC LIMIT 1");
                 $up_orders->bind_param("sid", $new_status, $order['user_id'], $order['total']);
             }
             $up_orders->execute();
