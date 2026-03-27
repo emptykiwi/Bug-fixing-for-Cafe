@@ -242,7 +242,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Close sidebar when clicking outside
         document.addEventListener('click', function(e) {
-            if (sidebar.classList.contains('active') && !sidebar.contains(e.target) && e.target !== toggle && !toggle.contains(e.target)) {
+            if (sidebar.classList.contains('active') && !sidebar.contains(e.target) && !toggle.contains(e.target)) {
                 sidebar.classList.remove('active');
                 const icon = toggle.querySelector('i');
                 icon.classList.remove('fa-times');

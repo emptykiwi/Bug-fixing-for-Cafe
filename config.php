@@ -139,3 +139,6 @@ if ($ap) {
 // OTP feature toggles
 if (!defined('OTP_ENABLED')) define('OTP_ENABLED', true);
 if (!defined('OTP_REQUIRE_FOR_ADMINS')) define('OTP_REQUIRE_FOR_ADMINS', true);
+
+// PayMongo Configuration
+if (!defined('PAYMONGO_SECRET_KEY')) define('PAYMONGO_SECRET_KEY', 'sk_test_4wnAfmzuwJANdZP9sB8Zxf1o');

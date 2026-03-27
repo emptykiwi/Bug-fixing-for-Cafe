@@ -125,13 +125,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!empty($order['order_id'])) {
                 $up_orders = $conn->prepare("UPDATE orders SET status = ? WHERE id = ?");
                 $up_orders->bind_param("si", $new_status, $order['order_id']);
+                $up_orders->execute();
+                $up_orders->close();
             } else {
                 // Heuristic: Match user, total, and non-cancelled/completed status
-                $up_orders = $conn->prepare("UPDATE orders SET status = ? WHERE user_id = ? AND total = ? AND status NOT IN ('Delivered', 'Cancelled') ORDER BY created_at DESC LIMIT 1");
+                $up_orders = $conn->prepare("UPDATE orders SET status = ? WHERE user_id = ? AND total = ? AND (status NOT IN ('Delivered', 'Cancelled') OR status IS NULL) ORDER BY created_at DESC LIMIT 1");
                 $up_orders->bind_param("sid", $new_status, $order['user_id'], $order['total']);
+                $up_orders->execute();
+                $up_orders->close();
             }
-            $up_orders->execute();
-            $up_orders->close();
 
             // 5) Special case for revenue on completion
             if ($new_status === 'Delivered') {

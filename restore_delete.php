@@ -53,10 +53,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $types .= "s"; 
                 } elseif ($col === 'id' && array_key_exists('order_id', $row)) {
                     // Map 'order_id' from recently_deleted back to 'id' in cart
-                    $col_names[] = "`id`";
-                    $placeholders[] = "?";
-                    $values[] = $row['order_id'];
-                    $types .= "i";
+                    // This is only if 'id' isn't already in $row (old structure)
+                    if (!array_key_exists('id', $row) || empty($row['id'])) {
+                        $col_names[] = "`id`";
+                        $placeholders[] = "?";
+                        $values[] = $row['order_id'];
+                        $types .= "i";
+                    }
                 }
             }
             

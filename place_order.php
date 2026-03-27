@@ -127,7 +127,7 @@ try {
     // --- PAYMONGO INTEGRATION ---
     $checkout_url = null;
     if (in_array($payment_method, ['GCash', 'GrabPay'])) {
-        $secret_key = 'sk_test_4wnAfmzuwJANdZP9sB8Zxf1o';
+        $secret_key = PAYMONGO_SECRET_KEY;
 
         // Dynamically get the base URL
         $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? "https" : "http";
@@ -144,7 +144,7 @@ try {
                         "name" => "Cafe Emmanuel Order #$order_id",
                         "quantity" => 1
                     ]],
-                    "payment_method_types" => [strtolower($payment_method)],
+                    "payment_method_types" => [($payment_method === 'GrabPay' ? 'grab_pay' : strtolower($payment_method))],
                     "description" => "Online Order from Cafe Emmanuel",
                     "success_url" => $base_url . "/success.html",
                     "cancel_url" => $base_url . "/my_orders.php"
