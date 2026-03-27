@@ -128,9 +128,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $up_orders->execute();
                 $up_orders->close();
             } else {
-                // Heuristic: Match user, total, and non-cancelled/completed status
-                $up_orders = $conn->prepare("UPDATE orders SET status = ? WHERE user_id = ? AND total = ? AND (status NOT IN ('Delivered', 'Cancelled') OR status IS NULL) ORDER BY created_at DESC LIMIT 1");
-                $up_orders->bind_param("sid", $new_status, $order['user_id'], $order['total']);
+                // Heuristic: Match user, total, and approximate creation date
+                $order_date = date('Y-m-d', strtotime($order['created_at']));
+                $up_orders = $conn->prepare("UPDATE orders SET status = ? WHERE user_id = ? AND total = ? AND DATE(created_at) = ? AND (status NOT IN ('Delivered', 'Cancelled') OR status IS NULL OR status = 'Pending') ORDER BY created_at DESC LIMIT 1");
+                $up_orders->bind_param("sids", $new_status, $order['user_id'], $order['total'], $order_date);
                 $up_orders->execute();
                 $up_orders->close();
             }

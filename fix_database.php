@@ -21,21 +21,48 @@ if ($conn->query($sql2)) {
     echo "<p style='color:green;'>✅ Successfully added 'contact' column.</p>";
 }
 
-// 3. Sync status for my_orders.php
-echo "<h3>Syncing order statuses...</h3>";
-$res = $conn->query("SELECT user_id, total, status, created_at FROM cart WHERE status != 'Pending'");
+// 3. Robust Link and Sync for my_orders.php
+echo "<h3>Linking and Syncing order statuses...</h3>";
+
+// Link cart.order_id to orders.id first
+$res = $conn->query("SELECT id, user_id, total, created_at FROM cart WHERE order_id IS NULL");
 while($row = $res->fetch_assoc()) {
+    $cid = $row['id'];
     $uid = $row['user_id'];
     $tot = $row['total'];
-    $st = $row['status'];
     $cat = $row['created_at'];
 
-    // Improved Sync to orders table heuristic: Match user, total and approximate creation time (within 1 hour)
-    $stmt = $conn->prepare("UPDATE orders SET status = ? WHERE user_id = ? AND total = ? AND ABS(TIMESTAMPDIFF(SECOND, created_at, ?)) < 3600 AND (status IS NULL OR status = '' OR status = 'Pending') LIMIT 1");
+    $stmt = $conn->prepare("SELECT id FROM orders WHERE user_id = ? AND total = ? AND DATE(created_at) = DATE(?) LIMIT 1");
     if ($stmt) {
-        $stmt->bind_param("sids", $st, $uid, $tot, $cat);
+        $stmt->bind_param("ids", $uid, $tot, $cat);
         $stmt->execute();
+        $ord_id = $stmt->get_result()->fetch_assoc()['id'] ?? null;
         $stmt->close();
+
+        if ($ord_id) {
+            $conn->query("UPDATE cart SET order_id = $ord_id WHERE id = $cid");
+        }
+    }
+}
+
+// Now Sync statuses based on the link or heuristic
+$res = $conn->query("SELECT order_id, user_id, total, status, created_at FROM cart WHERE status != 'Pending'");
+while($row = $res->fetch_assoc()) {
+    $oid = $row['order_id'];
+    $uid = $row['user_id'];
+    $tot = $row['total'];
+    $st  = $row['status'];
+    $cat = $row['created_at'];
+
+    if ($oid) {
+        $conn->query("UPDATE orders SET status = '$st' WHERE id = $oid AND (status IS NULL OR status = '' OR status = 'Pending')");
+    } else {
+        $stmt = $conn->prepare("UPDATE orders SET status = ? WHERE user_id = ? AND total = ? AND DATE(created_at) = DATE(?) AND (status IS NULL OR status = '' OR status = 'Pending') LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param("sids", $st, $uid, $tot, $cat);
+            $stmt->execute();
+            $stmt->close();
+        }
     }
 }
 

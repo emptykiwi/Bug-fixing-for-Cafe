@@ -134,12 +134,12 @@ if ($stmt) {
         .order-total { font-weight: 700; font-family: var(--font-heading); font-size: 1.1rem; }
         
         .status-badge { display: inline-block; padding: 6px 14px; border-radius: 30px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-width: 100px; text-align: center; }
-        .status-pending { background: #fff3cd !important; color: #856404 !important; }
-        .status-confirmed { background: #d1ecf1 !important; color: #0c5460 !important; }
-        .status-processing { background: #cce5ff !important; color: #004085 !important; }
-        .status-out-for-delivery { background: #e2e3e5 !important; color: #383d41 !important; }
-        .status-completed { background: #d4edda !important; color: #155724 !important; }
-        .status-cancelled { background: #f8d7da !important; color: #721c24 !important; }
+        .status-pending { background: #f0ad4e !important; color: #fff !important; }
+        .status-confirmed { background: #5bc0de !important; color: #fff !important; }
+        .status-processing { background: #337ab7 !important; color: #fff !important; }
+        .status-out-for-delivery { background: #777 !important; color: #fff !important; }
+        .status-completed { background: #5cb85c !important; color: #fff !important; }
+        .status-cancelled { background: #d9534f !important; color: #fff !important; }
 
         .action-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; background: var(--bg-main); color: var(--primary); font-size: 0.85rem; font-weight: 500; border: 1px solid #E6DCD3; transition: 0.3s; cursor: pointer; }
         .action-btn:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
@@ -290,7 +290,7 @@ if ($stmt) {
                                                 $status_class = 'status-cancelled';
                                             }
                                         ?>
-                                        <span class="status-badge <?php echo $status_class; ?>" style="display: inline-block !important;">
+                                        <span class="status-badge <?php echo $status_class; ?>" style="display: inline-block !important; padding: 6px 14px !important; border-radius: 30px !important; font-size: 0.8rem !important; font-weight: 700 !important; color: #fff !important; min-width: 100px !important; text-align: center !important;">
                                             <?php echo htmlspecialchars($display_text); ?>
                                         </span>
                                     </td>
