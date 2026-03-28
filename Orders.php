@@ -204,7 +204,7 @@ function getInitials($name) {
         border: 1px solid transparent;
     }
     .status-pending { background: rgba(212, 163, 115, 0.15); color: #B37D4D; border-color: rgba(212, 163, 115, 0.3); }
-    .status-confirmed, .status-processing { background: rgba(44, 30, 22, 0.1); color: var(--secondary); border-color: rgba(44, 30, 22, 0.2); }
+    .status-confirmed, .status-processing, .status-out-for-delivery { background: rgba(44, 30, 22, 0.1); color: var(--secondary); border-color: rgba(44, 30, 22, 0.2); }
     .status-delivered, .status-completed { background: #e8f5e9; color: #2e7d32; border-color: rgba(46,125,50,0.2); }
     .status-cancelled { background: #ffebee; color: #c62828; border-color: rgba(198,40,40,0.2); }
 
@@ -316,7 +316,7 @@ function getInitials($name) {
                       <?php
                         $cart_items = json_decode($row['cart'], true);
                         $status_raw = $row['status'] ?? 'Pending';
-                        $status_class = strtolower(str_replace(' ', '_', $status_raw));
+                        $status_class = strtolower(str_replace(' ', '-', $status_raw));
                         $row_data = htmlspecialchars(json_encode($row), ENT_QUOTES, 'UTF-8');
                       ?>
                       <tr>
@@ -370,7 +370,7 @@ function getInitials($name) {
                                     <input type="hidden" name="id" value="<?php echo $row['id']; ?>"><input type="hidden" name="action" value="out_for_delivery">
                                     <button type="submit" class="action-btn" title="Ship Order"><i class="fas fa-motorcycle"></i></button>
                                 </form>
-                            <?php elseif ($status_class === 'out_for_delivery') : ?>
+                            <?php elseif ($status_class === 'out-for-delivery') : ?>
                                 <form method="POST" action="update_order.php" style="display:inline;">
                                     <input type="hidden" name="id" value="<?php echo $row['id']; ?>"><input type="hidden" name="action" value="completed">
                                     <button type="submit" class="action-btn" title="Mark as Delivered"><i class="fas fa-check-double"></i></button>
