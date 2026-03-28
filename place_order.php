@@ -8,7 +8,7 @@ error_reporting(E_ALL);
 session_start();
 
 // 2. CONNECT TO DATABASE
-require_once 'db_connect.php'; // Ensure this points to your actual DB connection file
+require_once 'config.php'; // Use config.php as it defines PAYMONGO_SECRET_KEY and handles DB connection
 
 // Set header to return JSON so JavaScript can read it easily
 header('Content-Type: application/json');

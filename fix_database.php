@@ -12,6 +12,12 @@ if ($chk_cart && $chk_cart->num_rows == 0) {
     $conn->query("ALTER TABLE `cart` ADD COLUMN `order_id` INT NULL AFTER `user_id`");
 }
 
+$chk_orders_status = $conn->query("SHOW COLUMNS FROM `orders` LIKE 'status'");
+if ($chk_orders_status && $chk_orders_status->num_rows == 0) {
+    echo "Adding status to orders...\n";
+    $conn->query("ALTER TABLE `orders` ADD COLUMN `status` VARCHAR(50) DEFAULT 'Pending' AFTER `total`");
+}
+
 // Helper functions moved to recycle_bin_helper.php
 
 // Include helper for syncRecycleBinSchema

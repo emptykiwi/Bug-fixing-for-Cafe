@@ -42,6 +42,7 @@ function syncRecycleBinSchema($conn, $source, $target) {
     while ($tc = $res_target_cols->fetch_assoc()) {
         $col_name = $tc['Field'];
         $col_type = $tc['Type'];
+        $extra = strtolower($tc['Extra']);
 
         // Skip the new primary key we might add
         if ($col_name === 'bin_id') continue;
@@ -50,7 +51,12 @@ function syncRecycleBinSchema($conn, $source, $target) {
         if ($col_name === 'deleted_at') continue;
 
         // Force NULLABLE and remove any extra properties (like auto_increment)
-        $conn->query("ALTER TABLE `$target` MODIFY COLUMN `$col_name` $col_type NULL") or throw new Exception("Failed to modify $col_name in $target: " . $conn->error);
+        // If it was auto_increment, we MUST modify it to remove that BEFORE we can drop the primary key
+        if (strpos($extra, 'auto_increment') !== false) {
+            $conn->query("ALTER TABLE `$target` MODIFY COLUMN `$col_name` $col_type NULL") or throw new Exception("Failed to remove auto_increment from $col_name in $target: " . $conn->error);
+        } else {
+            $conn->query("ALTER TABLE `$target` MODIFY COLUMN `$col_name` $col_type NULL") or throw new Exception("Failed to modify $col_name in $target: " . $conn->error);
+        }
     }
 
     // 4. Ensure deleted_at column exists in target
@@ -63,7 +69,29 @@ function syncRecycleBinSchema($conn, $source, $target) {
     // This allows us to delete the same ID multiple times and keep multiple copies.
     $chk_bin_id = $conn->query("SHOW COLUMNS FROM `$target` LIKE 'bin_id'");
     if (!$chk_bin_id || $chk_bin_id->num_rows == 0) {
+        // A. Drop any existing primary key before adding bin_id
+        // NOTE: Auto-increment must be removed first (already handled in step 3)
+        $pk_res = $conn->query("SHOW INDEX FROM `$target` WHERE Key_name = 'PRIMARY'");
+        if ($pk_res && $pk_res->num_rows > 0) {
+            @$conn->query("ALTER TABLE `$target` DROP PRIMARY KEY");
+        }
+
+        // B. Add bin_id as Primary Key
         $conn->query("ALTER TABLE `$target` ADD COLUMN `bin_id` INT AUTO_INCREMENT PRIMARY KEY FIRST") or throw new Exception("Failed to add bin_id to $target: " . $conn->error);
+    } else {
+        // bin_id exists, but ensure it IS the primary key
+        $pk_res = $conn->query("SHOW INDEX FROM `$target` WHERE Key_name = 'PRIMARY'");
+        $has_correct_pk = false;
+        if ($pk_res) {
+            while ($pk = $pk_res->fetch_assoc()) {
+                if ($pk['Column_name'] === 'bin_id') $has_correct_pk = true;
+            }
+        }
+
+        if (!$has_correct_pk) {
+            @$conn->query("ALTER TABLE `$target` DROP PRIMARY KEY");
+            $conn->query("ALTER TABLE `$target` MODIFY COLUMN `bin_id` INT AUTO_INCREMENT PRIMARY KEY") or throw new Exception("Failed to set bin_id as primary key in $target: " . $conn->error);
+        }
     }
 
     // 6. ALWAYS Drop all other unique indexes to prevent collisions
