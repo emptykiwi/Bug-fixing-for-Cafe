@@ -18,7 +18,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'];
 
     // Get the record from recently_deleted (orders)
-    $sql = "SELECT * FROM recently_deleted WHERE id = ?";
+    // Check if we identify by bin_id (preferred) or old id
+    $chk = $conn->query("SHOW COLUMNS FROM recently_deleted LIKE 'bin_id'");
+    $id_col = ($chk && $chk->num_rows > 0) ? "bin_id" : "id";
+
+    $sql = "SELECT * FROM recently_deleted WHERE $id_col = ?";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("i", $id);
     $stmt->execute();
@@ -53,10 +57,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $types .= "s"; 
                 } elseif ($col === 'id' && array_key_exists('order_id', $row)) {
                     // Map 'order_id' from recently_deleted back to 'id' in cart
-                    $col_names[] = "`id`";
-                    $placeholders[] = "?";
-                    $values[] = $row['order_id'];
-                    $types .= "i";
+                    // This is only if 'id' isn't already in $row (old structure)
+                    if (!array_key_exists('id', $row) || empty($row['id'])) {
+                        $col_names[] = "`id`";
+                        $placeholders[] = "?";
+                        $values[] = $row['order_id'];
+                        $types .= "i";
+                    }
                 }
             }
             
@@ -69,8 +76,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($insert_stmt->execute()) {
                     $insert_stmt->close();
 
+                    // Restore status in orders table as well
+                    if (!empty($row['order_id']) && !empty($row['status'])) {
+                        $upd_orders = $conn->prepare("UPDATE orders SET status = ? WHERE id = ?");
+                        $upd_orders->bind_param("si", $row['status'], $row['order_id']);
+                        $upd_orders->execute();
+                        $upd_orders->close();
+                    }
+
                     // Remove from recently_deleted
-                    $delete_sql = "DELETE FROM recently_deleted WHERE id = ?";
+                    $delete_sql = "DELETE FROM recently_deleted WHERE $id_col = ?";
                     $delete_stmt = $conn->prepare($delete_sql);
                     $delete_stmt->bind_param("i", $id);
                     $delete_stmt->execute();
@@ -84,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         } elseif ($action === 'permanent_delete') {
             // Permanently delete
-            $delete_sql = "DELETE FROM recently_deleted WHERE id = ?";
+            $delete_sql = "DELETE FROM recently_deleted WHERE $id_col = ?";
             $delete_stmt = $conn->prepare($delete_sql);
             $delete_stmt->bind_param("i", $id);
             $delete_stmt->execute();

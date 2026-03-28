@@ -133,11 +133,13 @@ if ($stmt) {
         .order-date { font-size: 0.9rem; color: var(--text-muted); }
         .order-total { font-weight: 700; font-family: var(--font-heading); font-size: 1.1rem; }
         
-        .status-badge { display: inline-block; padding: 6px 14px; border-radius: 30px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-        .status-pending { background: #fff3cd; color: #856404; }
-        .status-processing { background: #cce5ff; color: #004085; }
-        .status-completed { background: #d4edda; color: #155724; }
-        .status-cancelled { background: #f8d7da; color: #721c24; }
+        .status-badge { display: inline-block; padding: 6px 14px; border-radius: 30px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-width: 100px; text-align: center; }
+        .status-pending { background: #f0ad4e !important; color: #fff !important; }
+        .status-confirmed { background: #5bc0de !important; color: #fff !important; }
+        .status-processing { background: #337ab7 !important; color: #fff !important; }
+        .status-out-for-delivery { background: #777 !important; color: #fff !important; }
+        .status-completed { background: #5cb85c !important; color: #fff !important; }
+        .status-cancelled { background: #d9534f !important; color: #fff !important; }
 
         .action-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; background: var(--bg-main); color: var(--primary); font-size: 0.85rem; font-weight: 500; border: 1px solid #E6DCD3; transition: 0.3s; cursor: pointer; }
         .action-btn:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
@@ -265,15 +267,31 @@ if ($stmt) {
                                     <td class="order-total">₱<?php echo number_format($order['total'] ?? 0, 2); ?></td>
                                     <td>
                                         <?php 
-                                            // Handle different statuses
-                                            $status = strtolower($order['status'] ?? 'pending');
-                                            $status_class = 'status-pending'; // default
-                                            if ($status === 'completed' || $status === 'delivered') $status_class = 'status-completed';
-                                            if ($status === 'processing' || $status === 'preparing') $status_class = 'status-processing';
-                                            if ($status === 'cancelled') $status_class = 'status-cancelled';
+                                            $raw_status = trim($order['status'] ?? '');
+                                            $status_lower = strtolower($raw_status);
+
+                                            $display_text = 'Pending';
+                                            $status_class = 'status-pending';
+
+                                            if ($status_lower === 'completed' || $status_lower === 'delivered') {
+                                                $display_text = 'Delivered';
+                                                $status_class = 'status-completed';
+                                            } elseif ($status_lower === 'confirmed' || $status_lower === 'accepted' || $status_lower === 'confirm' || $status_lower === 'accept') {
+                                                $display_text = 'Confirmed';
+                                                $status_class = 'status-confirmed';
+                                            } elseif ($status_lower === 'processing' || $status_lower === 'preparing' || $status_lower === 'process') {
+                                                $display_text = 'Processing';
+                                                $status_class = 'status-processing';
+                                            } elseif ($status_lower === 'out for delivery' || $status_lower === 'out_for_delivery' || $status_lower === 'ship' || $status_lower === 'out_for_delivery') {
+                                                $display_text = 'Out for Delivery';
+                                                $status_class = 'status-out-for-delivery';
+                                            } elseif ($status_lower === 'cancelled' || $status_lower === 'cancel') {
+                                                $display_text = 'Cancelled';
+                                                $status_class = 'status-cancelled';
+                                            }
                                         ?>
-                                        <span class="status-badge <?php echo $status_class; ?>">
-                                            <?php echo htmlspecialchars(ucfirst($status)); ?>
+                                        <span class="status-badge <?php echo $status_class; ?>" style="display: inline-block !important; padding: 6px 14px !important; border-radius: 30px !important; font-size: 0.8rem !important; font-weight: 700 !important; color: #fff !important; min-width: 100px !important; text-align: center !important;">
+                                            <?php echo htmlspecialchars($display_text); ?>
                                         </span>
                                     </td>
                                     <td>
@@ -281,7 +299,7 @@ if ($stmt) {
                                             <i class="fas fa-eye"></i> View
                                         </button>
                                         
-                                        <?php if ($status === 'pending'): ?>
+                                        <?php if ($status_lower === 'pending'): ?>
                                             <a href="cancel_order.php?id=<?php echo $order['id']; ?>" class="action-btn" style="color: #e02424; border-color: #fbc4c4;" onclick="return confirm('Are you sure you want to cancel this order?');">
                                                 <i class="fas fa-times"></i> Cancel
                                             </a>

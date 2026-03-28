@@ -8,7 +8,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = intval($_POST['id']);
     $action = $_POST['action'];
 
-    $stmt = $conn->prepare("SELECT * FROM recently_deleted_products WHERE id = ?");
+    $chk = $conn->query("SHOW COLUMNS FROM recently_deleted_products LIKE 'bin_id'");
+    $id_col = ($chk && $chk->num_rows > 0) ? "bin_id" : "id";
+
+    $stmt = $conn->prepare("SELECT * FROM recently_deleted_products WHERE $id_col = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -52,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->close();
 
                 // Delete from recently_deleted_products
-                $stmt = $conn->prepare("DELETE FROM recently_deleted_products WHERE id = ?");
+                $stmt = $conn->prepare("DELETE FROM recently_deleted_products WHERE $id_col = ?");
                 $stmt->bind_param("i", $id);
                 $stmt->execute();
                 $stmt->close();
@@ -61,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
         } elseif ($action === "permanent_delete") {
-            $stmt = $conn->prepare("DELETE FROM recently_deleted_products WHERE id = ?");
+            $stmt = $conn->prepare("DELETE FROM recently_deleted_products WHERE $id_col = ?");
             $stmt->bind_param("i", $id);
             $stmt->execute();
             $stmt->close();

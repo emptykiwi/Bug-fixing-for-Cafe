@@ -14,8 +14,18 @@ if ($recent_inquiries_result) {
     }
 }
 
-// --- FETCH AUDIT LOGS ---
-$sql = "SELECT admin_name, action, description, created_at FROM audit_logs ORDER BY created_at DESC";
+// --- FETCH AUDIT LOGS WITH PAGINATION ---
+$limit = 20; // Logs per page
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+if ($page < 1) $page = 1;
+$offset = ($page - 1) * $limit;
+
+// Get total logs for pagination
+$total_result = $conn->query("SELECT COUNT(*) as total FROM audit_logs");
+$total_logs = $total_result->fetch_assoc()['total'];
+$total_pages = ceil($total_logs / $limit);
+
+$sql = "SELECT admin_name, action, description, created_at FROM audit_logs ORDER BY created_at DESC LIMIT $limit OFFSET $offset";
 $result = $conn->query($sql);
 ?>
 <!DOCTYPE html>
@@ -117,6 +127,42 @@ $result = $conn->query($sql);
         }
         tr:hover td { background-color: #FDFBF7 !important; }
 
+        /* Pagination Styling */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 30px;
+            padding-bottom: 20px;
+        }
+        .page-link {
+            padding: 8px 16px;
+            border-radius: 8px;
+            background: var(--bg-card);
+            color: var(--secondary);
+            text-decoration: none;
+            border: 1px solid var(--border-color);
+            font-weight: 600;
+            transition: 0.3s;
+        }
+        .page-link:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        .page-link.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        .page-link.disabled {
+            background: #eee;
+            color: #aaa;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
         /* --- LOG STYLES --- */
         .admin-name { font-weight: 600; color: var(--secondary); }
         .action-tag {
@@ -136,7 +182,7 @@ $result = $conn->query($sql);
         .dropdown-item { padding: 15px 20px; display: block; text-decoration: none; color: var(--text-dark); font-size: 13px; border-bottom: 1px solid var(--bg-main); transition: 0.3s; }
         .dropdown-item:hover { background: var(--bg-main); color: var(--primary); }
 
-        @media (max-width: 1024px) { .main-content { margin-left: 0; width: 100%; } }
+        @media (max-width: 1024px) { .main-content { margin-left: 0; width: 100%; padding-top: 80px; } }
     </style>
 </head>
 <body>
@@ -201,6 +247,30 @@ $result = $conn->query($sql);
                 </table>
             </div>
         </div>
+
+        <!-- Pagination Controls -->
+        <?php if ($total_pages > 1): ?>
+        <div class="pagination">
+            <a href="?page=<?php echo $page - 1; ?>" class="page-link <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
+                <i class="fas fa-chevron-left"></i> Previous
+            </a>
+
+            <?php
+            $start = max(1, $page - 2);
+            $end = min($total_pages, $page + 2);
+            for ($i = $start; $i <= $end; $i++):
+            ?>
+                <a href="?page=<?php echo $i; ?>" class="page-link <?php echo ($i == $page) ? 'active' : ''; ?>">
+                    <?php echo $i; ?>
+                </a>
+            <?php endfor; ?>
+
+            <a href="?page=<?php echo $page + 1; ?>" class="page-link <?php echo ($page >= $total_pages) ? 'disabled' : ''; ?>">
+                Next <i class="fas fa-chevron-right"></i>
+            </a>
+        </div>
+        <?php endif; ?>
+
     </main>
 
     <script>

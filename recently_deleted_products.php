@@ -49,7 +49,7 @@ $result = $conn->query($sql);
               <td><?= $row['deleted_at'] ?></td>
               <td>
                 <form method="POST" action="product_actions.php">
-                  <input type="hidden" name="id" value="<?= $row['id'] ?>">
+                  <input type="hidden" name="id" value="<?= $row['bin_id'] ?? $row['id'] ?>">
                   <select name="action" class="action-select" onchange="this.form.submit()" required>
                     <option value="">-- Select --</option>
                     <option value="restore">Restore</option>

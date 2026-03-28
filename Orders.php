@@ -250,7 +250,7 @@ function getInitials($name) {
     .dropdown-item:last-child { border-bottom: none; }
 
     @media (max-width: 1024px) {
-        .main-content { margin-left: 0; width: 100%; }
+        .main-content { margin-left: 0; width: 100%; padding-top: 80px; }
     }
 </style>
 </head>
@@ -321,7 +321,10 @@ function getInitials($name) {
                       ?>
                       <tr>
                         <td>
-                            <span style="font-weight:700; color:var(--primary); font-size:1.1rem;">#<?php echo str_pad($row['id'], 4, '0', STR_PAD_LEFT); ?></span><br>
+                            <?php
+                                $display_order_id = $row['order_id'] ?? $row['id'];
+                            ?>
+                            <span style="font-weight:700; color:var(--primary); font-size:1.1rem;">#<?php echo str_pad($display_order_id, 4, '0', STR_PAD_LEFT); ?></span><br>
                             <small style="color:#3a2b24; font-size:11px;"><i class="far fa-clock" style="margin-right:3px;"></i><?php echo date("M d, Y H:i", strtotime($row['created_at'])); ?></small>
                         </td>
                         <td>
