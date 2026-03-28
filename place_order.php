@@ -8,7 +8,7 @@ error_reporting(E_ALL);
 session_start();
 
 // 2. CONNECT TO DATABASE
-require_once 'db_connect.php'; // Ensure this points to your actual DB connection file
+require_once 'config.php'; // Use config.php as it defines PAYMONGO_SECRET_KEY and handles DB connection
 
 // Set header to return JSON so JavaScript can read it easily
 header('Content-Type: application/json');
@@ -63,13 +63,18 @@ try {
     // 5b. ALSO INSERT INTO CART TABLE (For Admin Dashboard visibility)
     // The Admin Dashboard uses the 'cart' table to display and manage orders.
     $cart_json = json_encode($cart);
-    $stmt_cart = $conn->prepare("INSERT INTO cart (user_id, fullname, contact, address, cart, total, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'Pending', NOW())");
     
-    if (!$stmt_cart) {
-        throw new Exception("SQL Prepare Error (Cart): " . $conn->error);
+    // Check if cart table has order_id column
+    $chk = $conn->query("SHOW COLUMNS FROM `cart` LIKE 'order_id'");
+    if ($chk && $chk->num_rows > 0) {
+        $stmt_cart = $conn->prepare("INSERT INTO cart (user_id, order_id, fullname, contact, address, cart, total, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending', NOW())");
+        if (!$stmt_cart) throw new Exception("SQL Prepare Error (Cart w/ order_id): " . $conn->error);
+        $stmt_cart->bind_param("iissssd", $user_id, $order_id, $fullname, $contact, $address, $cart_json, $total);
+    } else {
+        $stmt_cart = $conn->prepare("INSERT INTO cart (user_id, fullname, contact, address, cart, total, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'Pending', NOW())");
+        if (!$stmt_cart) throw new Exception("SQL Prepare Error (Cart): " . $conn->error);
+        $stmt_cart->bind_param("issssd", $user_id, $fullname, $contact, $address, $cart_json, $total);
     }
-
-    $stmt_cart->bind_param("issssd", $user_id, $fullname, $contact, $address, $cart_json, $total);
     
     if (!$stmt_cart->execute()) {
         throw new Exception("SQL Execute Error (Cart): " . $stmt_cart->error);
@@ -119,12 +124,72 @@ try {
     // 7. COMMIT TRANSACTION (Save everything permanently)
     $conn->commit();
 
+    // --- PAYMONGO INTEGRATION ---
+    $checkout_url = null;
+    if (in_array($payment_method, ['GCash', 'GrabPay'])) {
+        $secret_key = PAYMONGO_SECRET_KEY;
+        
+        // Dynamically get the base URL
+        $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? "https" : "http";
+        $host = $_SERVER['HTTP_HOST'];
+        $path = dirname($_SERVER['PHP_SELF']);
+        $base_url = rtrim($protocol . "://" . $host . $path, '/');
+
+        $paymongo_data = [
+            "data" => [
+                "attributes" => [
+                    "line_items" => [[
+                        "currency" => "PHP",
+                        "amount" => intval($total * 100),
+                        "name" => "Cafe Emmanuel Order #$order_id",
+                        "quantity" => 1
+                    ]],
+                    "payment_method_types" => [($payment_method === 'GrabPay' ? 'grab_pay' : strtolower($payment_method))],
+                    "description" => "Online Order from Cafe Emmanuel",
+                    "success_url" => $base_url . "/success.html",
+                    "cancel_url" => $base_url . "/my_orders.php"
+                ]
+            ]
+        ];
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, "https://api.paymongo.com/v1/checkout_sessions");
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($paymongo_data));
+        curl_setopt($ch, CURLOPT_USERPWD, $secret_key . ":");
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Accept: application/json'
+        ]);
+
+        $response = curl_exec($ch);
+        $err = curl_error($ch);
+        curl_close($ch);
+
+        if ($err) {
+            throw new Exception("PayMongo cURL Error: " . $err);
+        }
+
+        $result = json_decode($response, true);
+        if (isset($result['data']['attributes']['checkout_url'])) {
+            $checkout_url = $result['data']['attributes']['checkout_url'];
+        } else {
+            // Log full error for debugging
+            error_log("PayMongo API Error: " . $response);
+            $error_msg = $result['errors'][0]['detail'] ?? "Failed to generate payment link.";
+            throw new Exception("PayMongo Error: " . $error_msg);
+        }
+    }
+
     // Send success back to Javascript
     // Changed "success" to "status" to match what checkout.php is expecting
     echo json_encode([
         "status" => "success", 
         "message" => "Order placed successfully!",
-        "order_id" => $order_id
+        "order_id" => $order_id,
+        "checkout_url" => $checkout_url
     ]);
 
 } catch (Exception $e) {

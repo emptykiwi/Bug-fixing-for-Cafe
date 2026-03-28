@@ -1,10 +1,20 @@
 <?php
 session_start();
+require_once 'db_connect.php';
 
 // Pre-fill user data if logged in
 $user_fullname = $_SESSION['fullname'] ?? '';
 $user_contact = $_SESSION['contact'] ?? '';
 $user_address = $_SESSION['address'] ?? '';
+
+// Fetch suggestions (3 random products with stock)
+$suggestions = [];
+$sug_res = $conn->query("SELECT * FROM products WHERE stock > 0 ORDER BY RAND() LIMIT 3");
+if ($sug_res) {
+    while ($row = $sug_res->fetch_assoc()) {
+        $suggestions[] = $row;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -80,6 +90,16 @@ $user_address = $_SESSION['address'] ?? '';
         .btn-submit:hover { background: var(--secondary); transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
         .btn-submit:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
 
+        /* SUGGESTIONS */
+        .suggestions-section { margin-top: 50px; }
+        .suggestions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 20px; }
+        .suggestion-card { background: white; border-radius: 12px; padding: 15px; box-shadow: var(--shadow); border: 1px solid var(--border-color); display: flex; flex-direction: column; align-items: center; text-align: center; }
+        .suggestion-img { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 12px; }
+        .suggestion-name { font-size: 15px; font-weight: 600; color: var(--secondary); margin-bottom: 5px; height: 45px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .suggestion-price { color: var(--primary); font-weight: 700; margin-bottom: 15px; }
+        .btn-add-suggestion { background: var(--bg-main); color: var(--primary); border: 1px solid var(--primary); padding: 8px 15px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.3s; width: 100%; }
+        .btn-add-suggestion:hover { background: var(--primary); color: white; }
+
         @media (max-width: 900px) { .checkout-wrapper { grid-template-columns: 1fr; } }
     </style>
 </head>
@@ -142,8 +162,7 @@ $user_address = $_SESSION['address'] ?? '';
 
         <div class="card" style="position: sticky; top: 100px;">
             <h3>Order Summary</h3>
-            <div id="summaryItemsContainer">
-                </div>
+            <div id="summaryItemsContainer"></div>
             
             <div class="summary-total">
                 <span>Total Amount</span>
@@ -151,23 +170,36 @@ $user_address = $_SESSION['address'] ?? '';
             </div>
         </div>
     </div>
+
+    <?php if (!empty($suggestions)): ?>
+    <section class="suggestions-section">
+        <h2 class="page-title" style="font-size: 28px;">Want to add more?</h2>
+        <div class="suggestions-grid">
+            <?php foreach ($suggestions as $item): ?>
+            <div class="suggestion-card">
+                <img src="<?php echo htmlspecialchars($item['image']); ?>" class="suggestion-img" onerror="this.src='logo.png'">
+                <div class="suggestion-name"><?php echo htmlspecialchars($item['name']); ?></div>
+                <div class="suggestion-price">₱<?php echo number_format($item['price'], 2); ?></div>
+                <button type="button" class="btn-add-suggestion" onclick='addSuggestion(<?php echo json_encode($item); ?>)'>
+                    <i class="fas fa-plus"></i> Add to Order
+                </button>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </section>
+    <?php endif; ?>
 </main>
 
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        // 1. Load cart from LocalStorage
-        let cart = JSON.parse(localStorage.getItem('cart')) || [];
-        
-        if (cart.length === 0) {
-            alert("Your cart is empty. Redirecting to menu...");
-            window.location.href = "index.php";
-            return;
-        }
+    // Global variable for grand total so suggestions can update it
+    let grandTotal = 0;
+    let cart = [];
 
-        // 2. Render Order Summary
+    function renderSummary() {
         const container = document.getElementById('summaryItemsContainer');
         const totalDisplay = document.getElementById('summaryTotalAmount');
-        let grandTotal = 0;
+        container.innerHTML = '';
+        grandTotal = 0;
 
         cart.forEach(item => {
             const price = parseFloat(item.price) || 0;
@@ -185,6 +217,40 @@ $user_address = $_SESSION['address'] ?? '';
         });
 
         totalDisplay.textContent = `₱${grandTotal.toFixed(2)}`;
+    }
+
+    function addSuggestion(product) {
+        // Check if already in cart
+        const existing = cart.find(item => item.id === product.id && (!item.size || item.size === 'Standard'));
+        if (existing) {
+            existing.quantity += 1;
+        } else {
+            cart.push({
+                id: product.id,
+                name: product.name,
+                price: product.price,
+                quantity: 1,
+                image: product.image,
+                size: 'Standard'
+            });
+        }
+        localStorage.setItem('cart', JSON.stringify(cart));
+        renderSummary();
+        alert(product.name + " added to your order!");
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // 1. Load cart from LocalStorage
+        cart = JSON.parse(localStorage.getItem('cart')) || [];
+        
+        if (cart.length === 0) {
+            alert("Your cart is empty. Redirecting to menu...");
+            window.location.href = "index.php";
+            return;
+        }
+
+        // 2. Render Order Summary
+        renderSummary();
 
         // 3. Handle Form Submission
         const form = document.getElementById('checkoutForm');

@@ -33,6 +33,7 @@ require_once __DIR__ . '/config.php';
     z-index: 1000;
     font-family: 'Poppins', sans-serif;
     border-right: 1px solid rgba(212, 163, 115, 0.1);
+    transition: var(--transition);
 }
 
 .sidebar-logo-link {
@@ -127,9 +128,42 @@ require_once __DIR__ . '/config.php';
     margin: 15px 0 10px 15px;
     font-weight: 600;
 }
+
+/* --- MOBILE HAMBURGER --- */
+.sidebar-toggle {
+    display: none;
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 1100;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 10px;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+}
+
+@media (max-width: 1024px) {
+    .sidebar {
+        left: -260px;
+    }
+    .sidebar.active {
+        left: 0;
+    }
+    .sidebar-toggle {
+        display: block;
+    }
+}
 </style>
 
-<aside class="sidebar">
+<!-- Sidebar Toggle Button -->
+<button class="sidebar-toggle" id="sidebarToggle">
+    <i class="fas fa-bars"></i>
+</button>
+
+<aside class="sidebar" id="adminSidebar">
    <a href="Dashboard.php" class="sidebar-logo-link">
        <img src="Logo_Brand.png" alt="Cafe Emmanuel Logo" class="sidebar-logo-img">
    </a>
@@ -184,3 +218,37 @@ require_once __DIR__ . '/config.php';
         </div>
     </nav>
 </aside>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const sidebar = document.getElementById('adminSidebar');
+    const toggle = document.getElementById('sidebarToggle');
+    
+    if (toggle && sidebar) {
+        toggle.addEventListener('click', function(e) {
+            e.stopPropagation();
+            sidebar.classList.toggle('active');
+            
+            // Toggle icon
+            const icon = toggle.querySelector('i');
+            if (sidebar.classList.contains('active')) {
+                icon.classList.remove('fa-bars');
+                icon.classList.add('fa-times');
+            } else {
+                icon.classList.remove('fa-times');
+                icon.classList.add('fa-bars');
+            }
+        });
+
+        // Close sidebar when clicking outside
+        document.addEventListener('click', function(e) {
+            if (sidebar.classList.contains('active') && !sidebar.contains(e.target) && !toggle.contains(e.target)) {
+                sidebar.classList.remove('active');
+                const icon = toggle.querySelector('i');
+                icon.classList.remove('fa-times');
+                icon.classList.add('fa-bars');
+            }
+        });
+    }
+});
+</script>

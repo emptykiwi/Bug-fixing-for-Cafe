@@ -2,6 +2,9 @@
 // config.php
 // Gracefully handle database connections and table setup for Hostinger Live Server
 
+// Set default timezone to UTC+08:00 Taipei
+date_default_timezone_set('Asia/Taipei');
+
 // Turn off mysqli exceptions so we can handle errors ourselves
 mysqli_report(MYSQLI_REPORT_OFF);
 
@@ -20,6 +23,9 @@ if (!$conn) {
 
 // Set charset
 mysqli_set_charset($conn, 'utf8mb4');
+
+// Set MySQL session timezone to UTC+08:00
+mysqli_query($conn, "SET time_zone = '+08:00'");
 
 // 2) Ensure `users` table exists
 $createUsersSql = "CREATE TABLE IF NOT EXISTS `users` (
@@ -108,6 +114,7 @@ if ($ap) {
     // Ensure `cart` has necessary columns
     $cartCols = [
         'user_id'       => "INT NULL AFTER `id`",
+        'order_id'      => "INT NULL AFTER `user_id`",
         'cancel_reason' => "VARCHAR(255) NULL AFTER `status`",
         'cancelled_at'  => "TIMESTAMP NULL AFTER `cancel_reason`"
     ];
@@ -116,6 +123,17 @@ if ($ap) {
         $chk = $ap->query("SHOW COLUMNS FROM `cart` LIKE '$col'");
         if ($chk && $chk->num_rows == 0) {
             @$ap->query("ALTER TABLE `cart` ADD COLUMN `$col` $def");
+        }
+    }
+
+    // Ensure `recently_deleted` table matches `cart` plus `deleted_at`
+    // We do this by ensuring the columns in `recently_deleted` reflect `cart`
+    $chk_rd = $ap->query("SHOW TABLES LIKE 'recently_deleted'");
+    if ($chk_rd && $chk_rd->num_rows > 0) {
+        // Table exists, check for deleted_at
+        $chk_da = $ap->query("SHOW COLUMNS FROM `recently_deleted` LIKE 'deleted_at'");
+        if ($chk_da && $chk_da->num_rows == 0) {
+            @$ap->query("ALTER TABLE `recently_deleted` ADD COLUMN `deleted_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
         }
     }
 
@@ -132,3 +150,6 @@ if ($ap) {
 // OTP feature toggles
 if (!defined('OTP_ENABLED')) define('OTP_ENABLED', true);
 if (!defined('OTP_REQUIRE_FOR_ADMINS')) define('OTP_REQUIRE_FOR_ADMINS', true);
+
+// PayMongo Configuration
+if (!defined('PAYMONGO_SECRET_KEY')) define('PAYMONGO_SECRET_KEY', 'sk_test_4wnAfmzuwJANdZP9sB8Zxf1o');

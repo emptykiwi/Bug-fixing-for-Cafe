@@ -394,9 +394,9 @@ while ($row = $all_orders_result->fetch_assoc()) {
     .dropdown-item:last-child { border-bottom: none; }
 
     /* Responsive */
-    @media (max-width: 1200px) {
+    @media (max-width: 1024px) {
         .dashboard-main-content { grid-template-columns: 1fr; }
-        .main-content { margin-left: 0; width: 100%; }
+        .main-content { margin-left: 0; width: 100%; padding-top: 80px; }
     }
 
     /* Billing details */

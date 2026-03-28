@@ -8,6 +8,7 @@ error_reporting(E_ALL);
 
 // 2. Connect to Database using your existing file
 require_once 'db_connect.php'; 
+require_once 'recycle_bin_helper.php';
 
 // 3. Include Audit Log
 if (file_exists('audit_log.php')) {
@@ -73,86 +74,27 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
             $user = $result->fetch_assoc();
             $stmt->close();
 
-            if ($user) {
-                // Security check: Admin cannot delete super_admin
-                if ($user['role'] === 'super_admin' && $_SESSION['role'] !== 'super_admin') {
-                     throw new Exception("Admin cannot delete Super Admin.");
-                }
+            if (!$user) {
+                throw new Exception("User #$user_id not found.");
+            }
 
-                // --- ROBUST RECYCLE BIN LOGIC WITH SCHEMA SYNC ---
-                $target_table = 'recently_deleted_users';
-                
-                // A. Ensure table exists (Clone structure)
-                $conn->query("CREATE TABLE IF NOT EXISTS `$target_table` LIKE users");
-                
-                // B. Auto-sync missing columns from users to recently_deleted_users
-                $user_cols_res = $conn->query("SHOW COLUMNS FROM users");
-                $target_cols_res = $conn->query("SHOW COLUMNS FROM `$target_table`");
-                
-                $target_cols = [];
-                if ($target_cols_res) {
-                    while ($row = $target_cols_res->fetch_assoc()) {
-                        $target_cols[] = $row['Field'];
-                    }
-                }
+            // Security check: Admin cannot delete super_admin
+            if ($user['role'] === 'super_admin' && $_SESSION['role'] !== 'super_admin') {
+                 throw new Exception("Admin cannot delete Super Admin.");
+            }
 
-                $columns_for_insert = [];
-                if ($user_cols_res) {
-                    while ($row = $user_cols_res->fetch_assoc()) {
-                        $field = $row['Field'];
-                        $columns_for_insert[] = "`$field`";
-                        
-                        // If column is missing in target table, dynamically add it
-                        if (!in_array($field, $target_cols)) {
-                            $type = $row['Type'];
-                            $conn->query("ALTER TABLE `$target_table` ADD COLUMN `$field` $type");
-                        }
-                    }
-                }
+            // --- ROBUST RECYCLE BIN LOGIC (Helper Used) ---
+            moveToRecycleBin($conn, 'users', 'recently_deleted_users', $user_id);
 
-                // C. Ensure 'deleted_at' column exists
-                $cols_check = $conn->query("SHOW COLUMNS FROM `$target_table` LIKE 'deleted_at'");
-                if ($cols_check->num_rows == 0) {
-                    $conn->query("ALTER TABLE `$target_table` ADD COLUMN deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP");
-                }
-                
-                // D. Copy record with ALL columns dynamically
-                $col_list = implode(", ", $columns_for_insert);
-                
-                // Insert into recycle bin
-                $copy_sql = "INSERT INTO `$target_table` ($col_list, deleted_at) SELECT $col_list, NOW() FROM users WHERE id = ?";
-                $stmt_copy = $conn->prepare($copy_sql);
-                if (!$stmt_copy) {
-                     throw new Exception("Prepare failed: " . $conn->error);
-                }
-                $stmt_copy->bind_param("i", $user_id);
-                if (!$stmt_copy->execute()) {
-                    throw new Exception("Failed to move user to recycle bin: " . $stmt_copy->error);
-                }
-                $stmt_copy->close();
+            // 3. Delete from the main users table
+            $delete_stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
+            $delete_stmt->bind_param("i", $user_id);
+            if (!$delete_stmt->execute()) throw new Exception("Failed to delete user from main table: " . $delete_stmt->error);
+            $delete_stmt->close();
 
-                // 3. Delete from the main users table
-                $delete_stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
-                $delete_stmt->bind_param("i", $user_id);
-                if (!$delete_stmt->execute()) {
-                    throw new Exception("Failed to delete user from main table.");
-                }
-                $delete_stmt->close();
-
-                // Log the action
-                if (function_exists('logAdminAction')) {
-                    logAdminAction(
-                        $conn,
-                        $admin_id,
-                        $admin_name,
-                        'user_delete',
-                        "Moved user to recycle bin: {$user['username']} (ID: {$user_id})",
-                        'users',
-                        $user_id
-                    );
-                }
-            } else {
-                throw new Exception("User not found.");
+            // Log the action
+            if (function_exists('logAdminAction')) {
+                logAdminAction($conn, $admin_id, $admin_name, 'user_delete', "Moved user to recycle bin: {$user['username']} (ID: {$user_id})", 'users', $user_id);
             }
         }
         

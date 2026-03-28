@@ -25,8 +25,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Use the single $conn from db_connect.php
     $conn->begin_transaction();
     try {
+        // Determine identifying column
+        $chk = $conn->query("SHOW COLUMNS FROM recently_deleted_products LIKE 'bin_id'");
+        $id_col = ($chk && $chk->num_rows > 0) ? "bin_id" : "id";
+
         // Get the deleted product record
-        $stmt = $conn->prepare("SELECT * FROM recently_deleted_products WHERE id = ?");
+        $stmt = $conn->prepare("SELECT * FROM recently_deleted_products WHERE $id_col = ?");
         $stmt->bind_param("i", $id);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -37,31 +41,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($action === 'restore') {
-            // Restore: Insert it back into the main 'products' table
-            // Note: We use the column names from your specific code
-            $insert_stmt = $conn->prepare("INSERT INTO products (name, price, stock, image, category, rating) VALUES (?, ?, ?, ?, ?, ?)");
-            $insert_stmt->bind_param("sdissi", $product['name'], $product['price'], $product['stock'], $product['image'], $product['category'], $product['rating']);
-            $insert_stmt->execute();
-            $new_product_id = $conn->insert_id; 
+            // Restore: Insert it back into the main 'products' table dynamically
+            $columns = [];
+            $res_cols = $conn->query("SHOW COLUMNS FROM products");
+            while ($c = $res_cols->fetch_assoc()) { $columns[] = $c['Field']; }
+            
+            $col_names = []; $placeholders = []; $values = []; $types = "";
+            foreach ($columns as $col) {
+                if (array_key_exists($col, $product)) {
+                    $col_names[] = "`$col`";
+                    $placeholders[] = "?";
+                    $values[] = $product[$col];
+                    $types .= "s";
+                }
+            }
+            
+            $sql_restore = "INSERT INTO products (" . implode(", ", $col_names) . ") VALUES (" . implode(", ", $placeholders) . ")";
+            $res_stmt = $conn->prepare($sql_restore);
+            $res_stmt->bind_param($types, ...$values);
+            $res_stmt->execute();
+            $new_id = $conn->insert_id;
+            $res_stmt->close();
 
             // Now, delete from the 'recently_deleted_products' table
-            $delete_stmt = $conn->prepare("DELETE FROM recently_deleted_products WHERE id = ?");
+            $delete_stmt = $conn->prepare("DELETE FROM recently_deleted_products WHERE $id_col = ?");
             $delete_stmt->bind_param("i", $id);
             $delete_stmt->execute();
+            $delete_stmt->close();
             
             $_SESSION['success_message'] = "Product restored successfully!";
 
-            // Log Action (if function exists)
             if (function_exists('logAdminAction')) {
-                logAdminAction(
-                    $conn, // Use the same connection
-                    $_SESSION['user_id'] ?? 0,
-                    $_SESSION['fullname'] ?? 'Admin',
-                    'product_restore',
-                    "Restored product: {$product['name']} (New ID: {$new_product_id})",
-                    'products',
-                    $new_product_id
-                );
+                logAdminAction($conn, $_SESSION['user_id'] ?? 0, $_SESSION['fullname'] ?? 'Admin', 'product_restore', "Restored product: {$product['name']} (New ID: $new_id)", 'products', $new_id);
             }
 
         } elseif ($action === 'permanent_delete') {
@@ -70,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 @unlink($product['image']); 
             }
             // Delete the record permanently
-            $delete_stmt = $conn->prepare("DELETE FROM recently_deleted_products WHERE id = ?");
+            $delete_stmt = $conn->prepare("DELETE FROM recently_deleted_products WHERE $id_col = ?");
             $delete_stmt->bind_param("i", $id);
             $delete_stmt->execute();
             
