@@ -104,11 +104,24 @@ mysqli_query($conn, $createPasswordResetsSql);
 $ap = $conn; // Alias $ap to $conn for compatibility
 
 if ($ap) {
-    // Ensure `orders` has user_id
+    // Ensure `orders` has correct columns and types
     $chk = $ap->query("SHOW COLUMNS FROM `orders` LIKE 'user_id'");
     if ($chk && $chk->num_rows == 0) {
         @$ap->query("ALTER TABLE `orders` ADD COLUMN `user_id` INT NULL AFTER `id`");
         @$ap->query("CREATE INDEX idx_orders_user_id ON `orders` (`user_id`)");
+    }
+
+    // Fix status column in orders table (convert from ENUM to VARCHAR if needed)
+    $chk_status = $ap->query("SHOW COLUMNS FROM `orders` LIKE 'status'");
+    if ($chk_status && $chk_status->num_rows > 0) {
+        $row = $chk_status->fetch_assoc();
+        // If it's an enum or not long enough, change it to VARCHAR(50)
+        if (strpos(strtolower($row['Type']), 'enum') !== false || strpos(strtolower($row['Type']), 'varchar(20)') !== false) {
+            @$ap->query("ALTER TABLE `orders` MODIFY COLUMN `status` VARCHAR(50) NOT NULL DEFAULT 'Pending'");
+        }
+    } else {
+        // If status column doesn't exist for some reason
+        @$ap->query("ALTER TABLE `orders` ADD COLUMN `status` VARCHAR(50) NOT NULL DEFAULT 'Pending' AFTER `total`");
     }
 
     // Ensure `cart` has necessary columns

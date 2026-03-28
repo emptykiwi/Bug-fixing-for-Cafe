@@ -282,7 +282,7 @@ if ($stmt) {
                                             } elseif ($status_lower === 'processing' || $status_lower === 'preparing' || $status_lower === 'process') {
                                                 $display_text = 'Processing';
                                                 $status_class = 'status-processing';
-                                            } elseif ($status_lower === 'out for delivery' || $status_lower === 'out_for_delivery' || $status_lower === 'ship' || $status_lower === 'out_for_delivery') {
+                                            } elseif ($status_lower === 'out for delivery' || $status_lower === 'out_for_delivery' || $status_lower === 'ship') {
                                                 $display_text = 'Out for Delivery';
                                                 $status_class = 'status-out-for-delivery';
                                             } elseif ($status_lower === 'cancelled' || $status_lower === 'cancel') {

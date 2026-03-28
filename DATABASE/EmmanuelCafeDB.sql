@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS `orders` (
   `payment_method` varchar(20) NOT NULL,
   `total` decimal(10,2) NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `status` enum('Pending','Completed','Cancelled') NOT NULL DEFAULT 'Pending',
+  `status` varchar(50) NOT NULL DEFAULT 'Pending',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -286,6 +286,7 @@ CREATE TABLE IF NOT EXISTS `orders` (
   `address` text NOT NULL,
   `total` decimal(10,2) NOT NULL,
   `payment_method` varchar(20) NOT NULL,
+  `status` varchar(50) NOT NULL DEFAULT 'Pending',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `order_date` datetime DEFAULT current_timestamp(),
   PRIMARY KEY (`id`)
